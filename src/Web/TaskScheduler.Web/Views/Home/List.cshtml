@@ -1,0 +1,141 @@
+﻿@{
+    ViewData["Title"] = "定时任务";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div id="task-container" v-cloak>
+    <Modal v-model="log.model"
+           v-bind:title="log.title"
+           width="460"
+           v-bind:mask-closable="log.closable"
+           v-bind:footer-hide="log.footerHide"
+           class-name="vertical-center-modal log-header">
+        <div class="log-model-content">
+            <el-scrollbar style="height:100%;">
+                @*<div style="padding-bottom: 20px;"> <i-button type="dashed" @@click="first">首页</i-button> <i-button type="dashed" @@click="next">下一页</i-button></div>*@
+                <div class="log-spin" v-show="log.spin">
+                    <Spin></Spin>
+                </div>
+                <Timeline>
+                    <Timeline-Item v-for="(item,index) in log.data" v-bind:key="index" color="green">
+                        <p class="time"><span>{{log.index+index}}、</span>执行时间：{{item.execute_time}}   耗时{{item.apm}} ms</p>
+                        <p class="content">{{item.response}}</p>
+                    </Timeline-Item>
+                </Timeline>
+            </el-scrollbar>
+        </div>
+    </Modal>
+
+    <Modal v-model="model"
+           v-bind:title="modelMessage"
+           width="660"
+           v-bind:mask-closable="closable"
+           v-bind:footer-hide="footerHide"
+           class-name="vertical-center-modal">
+        <div class="model-content">
+            <i-form ref="formValidate" :label-width="120" v-bind:model="taskValidate" v-bind:rules="ruleValidate">
+                <form-item v-for="item in taskForm" v-bind:label="item.text+'：'" v-bind:prop="item.name">
+                    <label v-if="item.readonly">{{taskValidate[item.name]}}</label>
+                    <i-input v-else-if="item.type=='textarea'" v-model="taskValidate[item.name]" type="textarea"></i-input>
+                    <i-select v-else-if="item.type=='select'" @@on-change="onChange(item,taskValidate[item.name])" v-model="taskValidate[item.name]" style="width:378px">
+                        <i-option v-for="item in selectCom.data" :value="item.value" :key="item.value">{{ item.label }}</i-option>
+                    </i-select>
+                    <i-input v-else v-model="taskValidate[item.name]" v-bind:class="{'read-only':item.readOnly}" v-bind:placeholder="item.placeholder"></i-input>
+                </form-item>
+                <div class="submit-btn">
+                    <a href="https://cron.qqe2.com/" target="_blank">cron在线生成</a>
+                    <i-button type="primary" @@click="handleSubmit('formValidate')">保存</i-button>
+                </div>
+            </i-form>
+        </div>
+    </Modal>
+
+    <el-dialog title="环境变量" :visible.sync="dialogTableVisible" :close-on-click-modal="false">
+        <el-row>
+            <el-col :span="24">
+                <el-table size="mini" :data="master_user.data" border style="width: 100%" highlight-current-row>
+                    <el-table-column type="index"></el-table-column>
+                    <el-table-column v-for="(v,i) in master_user.columns" :prop="v.field" :label="v.title" :width="v.width">
+                        <template slot-scope="scope">
+                            <span v-if="scope.row.isSet">
+                                <el-input size="mini" placeholder="请输入内容" v-model="master_user.sel[v.field]">
+                                </el-input>
+                            </span>
+                            <span v-else>{{scope.row[v.field]}}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="100">
+                        <template slot-scope="scope">
+                            <span class="el-tag el-tag--info el-tag--mini" style="cursor: pointer;" @@click="pwdChange(scope.row,scope.$index,true)">
+                                {{scope.row.isSet?'保存':"修改"}}
+                            </span>
+                            <span v-if="!scope.row.isSet" class="el-tag el-tag--danger el-tag--mini" style="cursor: pointer;" @@click="delChange(scope.row,scope.$index,false)">
+                                删除
+                            </span>
+                            <span v-else class="el-tag  el-tag--mini" style="cursor: pointer;" @@click="pwdChange(scope.row,scope.$index,false)">
+                                取消
+                            </span>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </el-col>
+            <el-col :span="24">
+                <div class="el-table-add-row" style="width: 100%;" @@click="addMasterUser()"><span>+ 添加</span></div>
+            </el-col>
+        </el-row>
+
+    </el-dialog>
+
+    <div class="task-content">
+        <div class="task-btn">
+            <div class="desc-text">
+                <span class="ivu-icon ivu-icon-ios-cube"> </span>
+                <span> 后台任务列表</span>
+            </div>
+            <i-button class="valuevisible" type="info" icon="ios-bookmark-outline" @@click="dialogTableVisible = true">环境变量</i-button>
+            <i-button type="info" icon="md-add" @@click="add">新建任务</i-button>
+            <i-button type="success" @@click="tiggerAction('pause')" icon="ios-power">暂停任务</i-button>
+            <i-button type="warning" @@click="tiggerAction('start')" icon="md-arrow-dropright">开启任务</i-button>
+            <i-button type="primary" @@click="tiggerAction('run')" icon="md-open">立即执行</i-button>
+            <i-button type="error" @@click="update" icon="md-construct">修改任务</i-button>
+            <i-button icon="md-close" @@click="tiggerAction('del')">删除任务</i-button>
+            <i-button type="info" icon="md-refresh" @@click="refresh(false)">刷新数据</i-button>
+        </div>
+        <div class="search">
+            <el-form :inline="true" :model="formInline" class="demo-form-inline">
+                <el-form-item label="作业名称">
+                    <el-input v-model="formInline.name" placeholder="请输入作业名称" clearable></el-input>
+                </el-form-item>
+                <el-form-item label="分组">
+                    <el-select v-model="formInline.group_name" filterable clearable placeholder="请选择分组">
+                        <el-option v-for="item in options"
+                                   :key="item.group_name"
+                                   :label="item.group_name"
+                                   :value="item.group_name">
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" @@click="onSubmit">查询</el-button>
+                </el-form-item>
+            </el-form>
+        </div>
+        <i-table border ref="selection" @@on-select="selectRow" :columns="getColumns()" :data="rows">
+        </i-table>
+        <div class="page">
+            <el-pagination @@size-change="handleSizeChange"
+                           @@current-change="handleCurrentChange"
+                           :current-page.sync="paginations.page_index"
+                           :page-sizes="paginations.page_sizes"
+                           :page-size="paginations.page_size"
+                           :layout="paginations.layout"
+                           :total="paginations.total">
+            </el-pagination>
+        </div>
+    </div>
+</div>
+<script src="~/js/task-index.js"></script>
+<script>
+    window.onload = function () {
+        $headerVue.activedIndex = 0;
+    }</script>
